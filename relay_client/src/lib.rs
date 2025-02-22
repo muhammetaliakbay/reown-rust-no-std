@@ -17,6 +17,7 @@ use {
 
 pub mod error;
 pub mod http;
+#[cfg(feature = "websocket")]
 pub mod websocket;
 
 pub type HttpRequest<T> = ::http::Request<T>;
@@ -127,6 +128,7 @@ impl ConnectionOptions {
         Ok(url)
     }
 
+    #[cfg(feature = "websocket")]
     fn as_ws_request(&self) -> Result<HttpRequest<()>, RequestBuildError> {
         use {
             crate::websocket::WebsocketClientError,

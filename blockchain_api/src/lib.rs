@@ -1,4 +1,3 @@
-pub use reqwest::Error;
 use {
     relay_rpc::{auth::cacao::signature::get_rpc_url::GetRpcUrl, domain::ProjectId},
     serde::Deserialize,
@@ -37,17 +36,20 @@ impl Drop for BlockchainApiProvider {
 async fn refresh_supported_chains(
     blockchain_api_supported_chains_endpoint: Url,
     supported_chains: &RwLock<HashSet<String>>,
-) -> Result<(), Error> {
-    let response = reqwest::get(blockchain_api_supported_chains_endpoint)
+) -> Result<(), sdk_core::http::Error> {
+    let response: SupportedChainsResponse = sdk_core::http::Client::new(Default::default())?
+        .get(blockchain_api_supported_chains_endpoint)
         .await?
-        .json::<SupportedChainsResponse>()
-        .await?;
+        .into_body();
     *supported_chains.write().await = response.http;
     Ok(())
 }
 
 impl BlockchainApiProvider {
-    pub async fn new(project_id: ProjectId, blockchain_api_endpoint: Url) -> Result<Self, Error> {
+    pub async fn new(
+        project_id: ProjectId,
+        blockchain_api_endpoint: Url,
+    ) -> Result<Self, sdk_core::http::Error> {
         let blockchain_api_rpc_endpoint = blockchain_api_endpoint
             .join(BLOCKCHAIN_API_RPC_ENDPOINT_STR)
             .expect("Safe unwrap: hardcoded URL: BLOCKCHAIN_API_RPC_ENDPOINT_STR");

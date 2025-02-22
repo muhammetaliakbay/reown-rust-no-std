@@ -15,7 +15,7 @@ use {
     url::Url,
 };
 
-pub type TransportError = reqwest::Error;
+pub type TransportError = sdk_core::http::Error;
 pub type Response<T> = Result<<T as ServiceRequest>::Response, Error<<T as ServiceRequest>::Error>>;
 pub type EmptyResponse<T> = Result<(), Error<<T as ServiceRequest>::Error>>;
 
@@ -36,8 +36,8 @@ pub enum HttpClientError {
     #[error("Invalid response")]
     InvalidResponse,
 
-    #[error("Invalid HTTP status: {0}, body: {1:?}")]
-    InvalidHttpCode(StatusCode, reqwest::Result<String>),
+    #[error("Invalid HTTP status: {0}")]
+    InvalidHttpCode(StatusCode),
 
     #[error("JWT error: {0}")]
     Jwt(#[from] JwtError),
@@ -72,7 +72,7 @@ pub struct WatchUnregisterRequest {
 /// The Relay HTTP RPC client.
 #[derive(Debug, Clone)]
 pub struct Client {
-    client: reqwest::Client,
+    client: sdk_core::http::Client,
     url: Url,
     origin: String,
     id_generator: MessageIdGenerator,
@@ -83,10 +83,7 @@ impl Client {
         let mut headers = HeaderMap::new();
         opts.update_request_headers(&mut headers)?;
 
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .build()
-            .map_err(HttpClientError::Transport)?;
+        let client = sdk_core::http::Client::new(headers).map_err(HttpClientError::Transport)?;
 
         let url = opts.as_url()?;
         let origin = url.origin().unicode_serialization();
@@ -315,23 +312,17 @@ impl Client {
         let response = async {
             let result = self
                 .client
-                .post(self.url.clone())
-                .json(&payload)
-                .send()
+                .post(self.url.clone(), &payload)
                 .await
                 .map_err(HttpClientError::Transport)?;
 
             let status = result.status();
 
             if !status.is_success() {
-                let body = result.text().await;
-                return Err(HttpClientError::InvalidHttpCode(status, body));
+                return Err(HttpClientError::InvalidHttpCode(status));
             }
 
-            result
-                .json::<rpc::Payload>()
-                .await
-                .map_err(|_| HttpClientError::InvalidResponse)
+            Ok(result.into_body())
         }
         .await
         .map_err(ClientError::from)
